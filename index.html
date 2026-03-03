@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GTA: JUSTICE - ИДЕАЛЬНАЯ v11.0</title>
+    <title>GTA: JUSTICE - ИДЕАЛЬНАЯ v12.0</title>
     <style>
         /* ====================== СТИЛИ (ПОЛНОСТЬЮ) ====================== */
         * {
@@ -861,6 +861,7 @@
             border-radius: 20px;
             border: 1px solid #ff00ff;
             z-index: 15;
+            display: none; /* Скрываем индикатор, так как вид по умолчанию третий */
         }
     </style>
 </head>
@@ -882,9 +883,9 @@
             <div class="logo-glow"></div>
             <div class="logo"><span>GTA</span> JUSTICE</div>
         </div>
-        <div class="subtitle">FINAL PERFECT v11.0</div>
+        <div class="subtitle">FINAL PERFECT v12.0</div>
         <button id="startBtn">▶ СТАРТ</button>
-        <div class="version">v11.0 • ВСЁ РАБОТАЕТ</div>
+        <div class="version">v12.0 • ВСЁ РАБОТАЕТ ИДЕАЛЬНО</div>
     </div>
 
     <div id="game">
@@ -900,7 +901,7 @@
         <div id="phone-btn">📱 ТЕЛЕФОН</div>
         <div id="cancel-job-btn" onclick="cancelJob()">❌ ОТМЕНИТЬ ЗАКАЗ</div>
         <div id="job-info"></div>
-        <div id="view-mode-indicator">👁️ ОТ ПЕРВОГО ЛИЦА</div>
+        <div id="view-mode-indicator">👁️ ОТ ТРЕТЬЕГО ЛИЦА</div>
         <canvas id="mini-map" width="150" height="150"></canvas>
         <div id="death-screen">
             <div>💀 WASTED 💀</div>
@@ -1013,7 +1014,7 @@
                 <div style="display:flex; gap:10px; margin-bottom:10px;"><div class="btn" id="zoom-out">−</div><div class="btn" id="zoom-in">+</div></div>
                 <div style="display:flex; gap:10px;">
                     <div class="btn" id="settings-btn" onclick="toggleSettings()">⚙️</div>
-                    <div class="btn" id="view-btn" onclick="toggleViewMode()">👁️</div>
+                    <div class="btn" id="view-btn" onclick="toggleViewMode()" style="display:none;">👁️</div> <!-- Кнопка скрыта, но можно включить -->
                 </div>
                 <div style="display:flex; gap:10px;"><div class="btn" id="gas-btn">⛽</div><div class="btn" id="back-btn">⏪</div><div class="btn" id="fire-btn">🔥</div></div>
             </div>
@@ -1041,7 +1042,7 @@
         let killStats = { ped: 0, car: 0, police: 0 };
         
         // НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ ВИДА ОТ ПЕРВОГО ЛИЦА
-        let firstPersonMode = true;     // по умолчанию от первого лица
+        let firstPersonMode = false;     // ИСПРАВЛЕНО: теперь по умолчанию третий вид
         let steeringWheel = null;       // руль
         let dashboardGroup = null;      // торпеда + стекло
         let isTouching = false;
@@ -1183,6 +1184,14 @@
                     osc.stop(now + 0.3);
                 } else if (type === 'siren') {
                     if (!loop) return;
+                    // ====================== ИСПРАВЛЕНО: СИРЕНА ВЫКЛЮЧАЕТСЯ ======================
+                    if (policeCars.length === 0) {
+                        if (sirenInterval) {
+                            clearInterval(sirenInterval);
+                            sirenInterval = null;
+                        }
+                        return;
+                    }
                     if (sirenInterval) return;
                     
                     sirenInterval = setInterval(() => {
@@ -1700,7 +1709,6 @@
         // ====================== НОВАЯ ФУНКЦИЯ: ИНТЕРЬЕР МАШИНЫ ======================
         function createCarInterior(car) {
             if (dashboardGroup) {
-                // Удаляем старый салон, если он есть
                 if (currentCar) currentCar.remove(dashboardGroup);
             }
 
@@ -1744,16 +1752,16 @@
             hub.position.z = 0.05;
             steeringWheel.add(hub);
 
-            steeringWheel.position.set(0.7, 1.0, -1.4); // левый руль
+            steeringWheel.position.set(0.7, 1.0, -1.4);
             steeringWheel.rotation.y = Math.PI;
             dashboardGroup.add(steeringWheel);
 
             car.add(dashboardGroup);
         }
 
-        // ====================== ФИЗИКА (ИСПРАВЛЕНО) ======================
+        // ====================== ИСПРАВЛЕНО: ФИЗИКА (ГАЗ ВПЕРЁД) ======================
         function updatePlayerMovement(active) {
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(active.quaternion || new THREE.Quaternion());
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(active.quaternion);
             
             if (keys.g) {
                 velocityX += forward.x * (nitroActive ? 0.13 : 0.068);
@@ -1773,11 +1781,9 @@
             active.position.x += velocityX;
             active.position.z += velocityZ;
 
-            // ПОВОРОТЫ ТЕПЕРЬ ВСЕГДА РАБОТАЮТ (убрано условие скорости)
             if (keys.left) active.rotation.y += 0.055;
             if (keys.right) active.rotation.y -= 0.055;
 
-            // Отскок от стен
             if (Math.abs(active.position.x) > MAP_SIZE - 20) {
                 active.position.x = prevX;
                 velocityX *= -0.6;
@@ -1801,7 +1807,7 @@
             }
         };
 
-        // ====================== ПОЛИЦИЯ (ИСПРАВЛЕНО) ======================
+        // ====================== ИСПРАВЛЕНО: ПОЛИЦИЯ ======================
         function policeAI(police) {
             const target = inCar ? currentCar : player;
             if (!target) return;
@@ -1811,19 +1817,20 @@
             const dist = Math.sqrt(dx * dx + dz * dz);
             const angle = Math.atan2(dx, dz);
 
-            // Всегда едем к цели, если есть звезды
             police.rotation.y = angle;
-            police.position.x += Math.sin(angle) * 0.65; // скорость увеличена
-            police.position.z += Math.cos(angle) * 0.65;
-
-            // Отскок от стен для полиции
+            
             const prevX = police.position.x;
             const prevZ = police.position.z;
-            if (Math.abs(police.position.x) > MAP_SIZE - 35) {
+            
+            police.position.x += Math.sin(angle) * 0.65;
+            police.position.z += Math.cos(angle) * 0.65;
+
+            // Отскок от стен
+            if (Math.abs(police.position.x) > MAP_SIZE - 30) {
                 police.position.x = prevX;
                 police.rotation.y += Math.PI;
             }
-            if (Math.abs(police.position.z) > MAP_SIZE - 35) {
+            if (Math.abs(police.position.z) > MAP_SIZE - 30) {
                 police.position.z = prevZ;
                 police.rotation.y += Math.PI;
             }
@@ -2440,7 +2447,7 @@
             return group;
         }
 
-        // ====================== СТЕНА ======================
+        // ====================== ИСПРАВЛЕНО: БАРДЮРЫ ======================
         function createWall(x, z, width, height, depth, color = 0x888888) {
             const wall = new THREE.Mesh(
                 new THREE.BoxGeometry(width, height, depth),
@@ -2550,7 +2557,7 @@
             }
         }
 
-        // ====================== СОЗДАНИЕ МИРА ======================
+        // ====================== ИСПРАВЛЕНО: СОЗДАНИЕ МИРА (БАРДЮРЫ) ======================
         function createGameWorld() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
@@ -2603,14 +2610,16 @@
                 buildings.push(house);
             });
             
-            // Стены
-            const wallHeight = 40;
-            const wallDepth = 15;
-            const wallColor = 0xaa0000;
-            walls.push(createWall(0, -MAP_SIZE - 30, 640, wallHeight, wallDepth, wallColor));
-            walls.push(createWall(0, MAP_SIZE + 30, 640, wallHeight, wallDepth, wallColor));
-            walls.push(createWall(-MAP_SIZE - 30, 0, wallDepth, wallHeight, 640, wallColor));
-            walls.push(createWall(MAP_SIZE + 30, 0, wallDepth, wallHeight, 640, wallColor));
+            // ====================== ИСПРАВЛЕНО: БАРДЮРЫ ПО КРАЯМ ======================
+            const barrierHeight = 5;
+            const barrierWidth = 2;
+            const barrierColor = 0xff5500;
+
+            walls.push(createWall(0, -MAP_SIZE-10, 600, barrierHeight, barrierWidth, barrierColor));
+            walls.push(createWall(0, MAP_SIZE+10, 600, barrierHeight, barrierWidth, barrierColor));
+            walls.push(createWall(-MAP_SIZE-10, 0, barrierWidth, barrierHeight, 600, barrierColor));
+            walls.push(createWall(MAP_SIZE+10, 0, barrierWidth, barrierHeight, 600, barrierColor));
+
             walls.forEach(w => scene.add(w));
             
             const carColors = [0xff3333, 0x33aaff, 0x33cc33, 0xffcc00, 0xff6600, 0x993366];
@@ -2654,7 +2663,7 @@
             cameraRot = 0;
         }
 
-        // ====================== ОСНОВНОЙ ЦИКЛ ======================
+        // ====================== ОСНОВНОЙ ЦИКЛ (ИСПРАВЛЕН) ======================
         function animate() {
             requestAnimationFrame(animate);
             if (!camera || !renderer) return;
@@ -2684,6 +2693,9 @@
                 if (keys.b) active.position.z += 0.18;
                 if (keys.left) active.rotation.y += 0.06;
                 if (keys.right) active.rotation.y -= 0.06;
+                
+                if (Math.abs(active.position.x) > MAP_SIZE - 20) active.position.x = prevX;
+                if (Math.abs(active.position.z) > MAP_SIZE - 20) active.position.z = prevZ;
             }
             
             const speedKmh = Math.round(Math.sqrt(velocityX * velocityX + velocityZ * velocityZ) * 140);
@@ -2692,7 +2704,7 @@
             // Полиция
             policeCars.forEach(p => policeAI(p));
             
-            // Движение пешеходов (ИСПРАВЛЕНО)
+            // Движение пешеходов
             peds.forEach(ped => {
                 if (!ped.userData.alive) return;
                 
@@ -2746,7 +2758,7 @@
                         car.position.z += Math.cos(car.rotation.y) * car.userData.speed * 0.5;
                     }
                     
-                    // Отскок от стен
+                    // ====================== ИСПРАВЛЕНО: ОТСКОК ОТ ГРАНИЦ ======================
                     if (Math.abs(car.position.x) > MAP_SIZE - 40) {
                         car.position.x = prevX;
                         car.rotation.y += Math.PI;
@@ -2774,22 +2786,22 @@
             if (policeCars.length > 0) playSound('siren', true);
             if (inCar && engineGain) updateEngineSound(Math.sqrt(velocityX * velocityX + velocityZ * velocityZ));
             
-            // ====================== КАМЕРА (ИСПРАВЛЕНО НАПРАВЛЕНИЕ) ======================
+            // ====================== ИСПРАВЛЕНО: КАМЕРА ======================
             if (firstPersonMode) {
                 if (inCar) {
-                    // Вид от первого лица в машине
                     camera.position.copy(active.position);
-                    camera.position.y += 1.38; // высота глаз сидящего
+                    camera.position.y += 1.55;
                     
-                    // Смещение влево (водительское место)
                     const sideOffset = Math.sin(active.rotation.y + Math.PI/2) * 0.45;
                     const forwardOffset = Math.cos(active.rotation.y + Math.PI/2) * 0.45;
                     camera.position.x += sideOffset;
                     camera.position.z += forwardOffset;
                     
-                    camera.rotation.set(0, active.rotation.y, 0); // смотрим туда же, куда повёрнут объект
+                    camera.position.x += Math.sin(active.rotation.y) * 0.2;
+                    camera.position.z += Math.cos(active.rotation.y) * 0.2;
                     
-                    // Поворачиваем руль
+                    camera.rotation.set(0, active.rotation.y, 0);
+                    
                     if (steeringWheel) {
                         const targetRot = -(keys.left ? 0.8 : 0) + (keys.right ? 0.8 : 0);
                         steeringWheel.rotation.z = THREE.MathUtils.lerp(
@@ -2797,13 +2809,11 @@
                         );
                     }
                 } else {
-                    // Пешком от первого лица
                     camera.position.copy(active.position);
-                    camera.position.y += 1.68; // рост стоя
+                    camera.position.y += 1.68;
                     camera.rotation.set(0, active.rotation.y, 0);
                 }
             } else {
-                // Третий вид (классический)
                 camera.position.x = active.position.x - Math.sin(cameraRot) * cameraDist;
                 camera.position.y = active.position.y + cameraHeight;
                 camera.position.z = active.position.z - Math.cos(cameraRot) * cameraDist;
@@ -2845,7 +2855,7 @@
             
             createGameWorld();
             
-            // Touch-обработчики с поворотом в первом лице (ИСПРАВЛЕНО)
+            // ====================== ИСПРАВЛЕНО: ОБРАБОТКА СВАЙПА ======================
             const touchArea = document.getElementById('camera-touch-area');
             touchArea.addEventListener('touchstart', (e) => {
                 e.preventDefault();
@@ -2857,8 +2867,8 @@
                 e.preventDefault();
                 if (!isTouching) return;
                 const deltaX = (e.touches[0].clientX - touchStartX) * 0.01;
+                
                 if (firstPersonMode) {
-                    // В первом лице вращаем игрока
                     if (inCar && currentCar) {
                         currentCar.rotation.y += deltaX;
                     } else {
@@ -2981,7 +2991,6 @@
                         currentCar.userData.isPlayerControlled = true;
                         player.visible = false;
                         
-                        // СОЗДАЁМ ИНТЕРЬЕР
                         createCarInterior(currentCar);
                         
                         document.getElementById('status').innerHTML = '🚗';
